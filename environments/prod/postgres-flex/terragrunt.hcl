@@ -3,10 +3,9 @@ include "root" {
 }
 
 locals {
-  common  = read_terragrunt_config(find_in_parent_folders("common.hcl"))
   env_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
 
-  subscription_id = local.common.locals.subscription_id
+  subscription_id = local.env_vars.locals.subscription_id
   env             = local.env_vars.locals.env
   vnet_rg         = local.env_vars.locals.vnet_rg
   vnet_name       = local.env_vars.locals.vnet_name

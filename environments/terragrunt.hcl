@@ -11,14 +11,12 @@
 # =============================================================================
 
 locals {
-  # Read the env.hcl that lives in each environment folder (prod / non-prod).
-  env_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
-  env      = local.env_vars.locals.env
-
-  # Shared values — subscription ID and region live in common.hcl.
-  common          = read_terragrunt_config("${get_terragrunt_dir()}/../common.hcl")
-  subscription_id = local.common.locals.subscription_id
-  location        = local.common.locals.location
+  # All environment-specific values live in env.hcl (prod / non-prod).
+  # Each environment targets its own subscription in real use.
+  env_vars        = read_terragrunt_config(find_in_parent_folders("env.hcl"))
+  env             = local.env_vars.locals.env
+  subscription_id = local.env_vars.locals.subscription_id
+  location        = local.env_vars.locals.location
 
   # ---------------------------------------------------------------------------
   # GitLab HTTP backend
