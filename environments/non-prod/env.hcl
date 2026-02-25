@@ -1,4 +1,6 @@
-# Environment-level locals consumed by the root terragrunt.hcl
 locals {
-  env = "non-prod"
+  env         = "non-prod"
+  vnet_rg     = "rg-networking-nonprod-uksouth"
+  vnet_name   = "vnet-nonprod-uksouth"
+  subnet_name = "snet-postgres-nonprod"
 }

@@ -15,9 +15,10 @@ locals {
   env_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
   env      = local.env_vars.locals.env
 
-  # Subscription is shared; override per-environment in env.hcl if needed.
-  subscription_id = "00000000-0000-0000-0000-000000000000" # <-- replace with your subscription ID
-  location        = "uksouth"
+  # Shared values — subscription ID and region live in common.hcl.
+  common          = read_terragrunt_config("${get_terragrunt_dir()}/../common.hcl")
+  subscription_id = local.common.locals.subscription_id
+  location        = local.common.locals.location
 
   # ---------------------------------------------------------------------------
   # GitLab HTTP backend

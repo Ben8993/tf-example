@@ -2,13 +2,26 @@ include "root" {
   path = find_in_parent_folders()
 }
 
+locals {
+  common   = read_terragrunt_config(find_in_parent_folders("common.hcl"))
+  env_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
+
+  subscription_id = local.common.locals.subscription_id
+  env             = local.env_vars.locals.env
+  vnet_rg         = local.env_vars.locals.vnet_rg
+  vnet_name       = local.env_vars.locals.vnet_name
+  subnet_name     = local.env_vars.locals.subnet_name
+
+  vnet_base = "/subscriptions/${local.subscription_id}/resourceGroups/${local.vnet_rg}/providers/Microsoft.Network/virtualNetworks/${local.vnet_name}"
+}
+
 terraform {
   source = "../../../modules/postgres-flex-server"
 }
 
 inputs = {
-  resource_group_name = "rg-postgres-non-prod-uksouth"
-  server_name         = "psql-flex-non-prod-uksouth"
+  resource_group_name = "rg-postgres-${local.env}-uksouth"
+  server_name         = "psql-flex-${local.env}-uksouth"
   administrator_login = "psqladmin"
 
   # Set as a masked GitLab CI variable: POSTGRES_ADMIN_PASSWORD_NONPROD
@@ -17,13 +30,11 @@ inputs = {
   sku_name   = "B_Standard_B1ms"
   storage_mb = 32768
 
-  # Replace with your actual subnet and VNet resource IDs.
-  # The subnet must be delegated to Microsoft.DBforPostgreSQL/flexibleServers.
-  delegated_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-networking-nonprod/providers/Microsoft.Network/virtualNetworks/vnet-nonprod-uksouth/subnets/snet-postgres-nonprod"
-  virtual_network_id  = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-networking-nonprod/providers/Microsoft.Network/virtualNetworks/vnet-nonprod-uksouth"
+  delegated_subnet_id = "${local.vnet_base}/subnets/${local.subnet_name}"
+  virtual_network_id  = local.vnet_base
 
   tags = {
-    environment = "non-prod"
+    environment = local.env
     managed_by  = "terraform"
   }
 }
