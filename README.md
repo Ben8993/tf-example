@@ -6,40 +6,45 @@ Terraform module and Terragrunt environment configs for deploying an Azure Datab
 
 ```
 tf-example/
+├── .gitlab-ci.yml
 ├── modules/
-│   └── postgres-flex-server/   # Reusable Terraform module
+│   └── postgres-flex-server/       # Reusable Terraform module
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       └── versions.tf
 └── environments/
-    ├── terragrunt.hcl          # Root config: provider, GitLab HTTP backend
+    ├── terragrunt.hcl              # Root config: provider, GitLab HTTP backend
     ├── prod/
-    │   ├── env.hcl
-    │   └── postgres-flex/terragrunt.hcl
+    │   ├── env.hcl                 # Prod subscription, region, networking values
+    │   └── postgres-flex/
+    │       └── terragrunt.hcl      # Calls module with prod inputs
     └── non-prod/
-        ├── env.hcl
-        └── postgres-flex/terragrunt.hcl
+        ├── env.hcl                 # Non-prod subscription, region, networking values
+        └── postgres-flex/
+            └── terragrunt.hcl      # Calls module with non-prod inputs
 ```
-
-## Prerequisites
-
-- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5.0
-- [Terragrunt](https://terragrunt.gruntwork.io/docs/getting-started/install/) >= 0.67
-- An existing Azure subscription with a VNet and a subnet delegated to `Microsoft.DBforPostgreSQL/flexibleServers`
-- An Azure Service Principal with Contributor access to the target resource group
 
 ## Configuration
 
-### 1. Update the subscription ID
+### 1. Update env.hcl for each environment
 
-In `environments/terragrunt.hcl`, replace the placeholder:
+Each `env.hcl` is the single source of truth for that environment. Update the values to match your Azure setup:
 
 ```hcl
-subscription_id = "00000000-0000-0000-0000-000000000000"
+locals {
+  env             = "prod"
+  subscription_id = "00000000-0000-0000-0000-000000000000"  # your subscription ID
+  location        = "uksouth"
+  vnet_rg         = "rg-networking-prod-uksouth"
+  vnet_name       = "vnet-prod-uksouth"
+  subnet_name     = "snet-postgres-prod"                    # must be delegated to Microsoft.DBforPostgreSQL/flexibleServers
+}
 ```
 
-### 2. Update subnet and VNet IDs
+In real use, `prod` and `non-prod` will each have their own subscription ID.
 
-In each environment's `terragrunt.hcl`, replace the `delegated_subnet_id` and `virtual_network_id` with your actual resource IDs.
-
-### 3. GitLab CI/CD variables
+### 2. GitLab CI/CD variables
 
 Set the following as masked variables in **Settings → CI/CD → Variables**:
 
@@ -51,6 +56,8 @@ Set the following as masked variables in **Settings → CI/CD → Variables**:
 | `ARM_SUBSCRIPTION_ID` | Target subscription ID |
 | `POSTGRES_ADMIN_PASSWORD_PROD` | Prod server admin password |
 | `POSTGRES_ADMIN_PASSWORD_NONPROD` | Non-prod server admin password |
+
+`CI_JOB_TOKEN` and `CI_PROJECT_ID` are injected automatically by GitLab.
 
 ## Environments
 
@@ -79,3 +86,10 @@ terragrunt plan
 ```
 
 Ensure `ARM_*` environment variables are exported in your shell before running.
+
+## Prerequisites
+
+- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5.0
+- [Terragrunt](https://terragrunt.gruntwork.io/docs/getting-started/install/) >= 0.67
+- An existing Azure VNet with a subnet delegated to `Microsoft.DBforPostgreSQL/flexibleServers`
+- An Azure Service Principal with Contributor access to the target resource groups
