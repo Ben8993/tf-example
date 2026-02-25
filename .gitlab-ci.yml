@@ -4,8 +4,7 @@
 # Pipeline behaviour
 # ──────────────────
 # • Every pipeline (MR or push):  validate → plan  (both environments)
-# • Merge to default branch:      non-prod apply runs automatically
-# • Merge to default branch:      prod apply is gated behind a manual trigger
+# • Merge to default branch:      plan runs, then apply is gated behind a manual trigger (both environments)
 #
 # Required GitLab CI/CD variables  (Settings → CI/CD → Variables)
 # ──────────────────────────────────────────────────────────────────
@@ -120,8 +119,8 @@ plan:prod:
 
 # =============================================================================
 # APPLY
-# Non-prod: automatic on the default branch.
-# Prod:     manual gate – a human must click "play" in the GitLab UI.
+# Both environments: plan runs automatically on merge to default branch,
+# apply always requires a manual trigger.
 # =============================================================================
 
 apply:non-prod:
@@ -132,9 +131,10 @@ apply:non-prod:
     - terragrunt apply --terragrunt-non-interactive -auto-approve
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-      when: on_success
+      when: manual
   needs:
     - plan:non-prod
+  allow_failure: false
 
 apply:prod:
   extends: .prod
