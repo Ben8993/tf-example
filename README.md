@@ -36,9 +36,6 @@ locals {
   env             = "prod"
   subscription_id = "00000000-0000-0000-0000-000000000000"  # your subscription ID
   location        = "uksouth"
-  vnet_rg         = "rg-networking-prod-uksouth"
-  vnet_name       = "vnet-prod-uksouth"
-  subnet_name     = "snet-postgres-prod"                    # must be delegated to Microsoft.DBforPostgreSQL/flexibleServers
 }
 ```
 
@@ -71,7 +68,7 @@ Set the following as masked variables in **Settings → CI/CD → Variables**:
 | Trigger | non-prod | prod |
 |---|---|---|
 | Merge request | validate + plan | validate + plan |
-| Merge to default branch | plan, then manual apply | plan, then manual apply |
+| Merge to default branch | manual apply | manual apply |
 
 ## Running locally
 
@@ -91,5 +88,4 @@ Ensure `ARM_*` environment variables are exported in your shell before running.
 
 - [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5.0
 - [Terragrunt](https://terragrunt.gruntwork.io/docs/getting-started/install/) >= 0.67
-- An existing Azure VNet with a subnet delegated to `Microsoft.DBforPostgreSQL/flexibleServers`
 - An Azure Service Principal with Contributor access to the target resource groups

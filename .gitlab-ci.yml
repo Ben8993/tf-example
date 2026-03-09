@@ -3,8 +3,8 @@
 #
 # Pipeline behaviour
 # ──────────────────
-# • Every pipeline (MR or push):  validate → plan  (both environments)
-# • Merge to default branch:      plan runs, then apply is gated behind a manual trigger (both environments)
+# • Merge request:            validate → plan  (both environments)
+# • Merge to default branch:  apply available as a manual trigger (both environments)
 #
 # Required GitLab CI/CD variables  (Settings → CI/CD → Variables)
 # ──────────────────────────────────────────────────────────────────
@@ -69,6 +69,8 @@ validate:non-prod:
   script:
     - cd "${ENV_DIR}"
     - terragrunt validate --terragrunt-non-interactive
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
 
 validate:prod:
   extends: .prod
@@ -76,11 +78,12 @@ validate:prod:
   script:
     - cd "${ENV_DIR}"
     - terragrunt validate --terragrunt-non-interactive
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
 
 # =============================================================================
 # PLAN
-# Run on every MR and on every push to the default branch so the diff is
-# always visible before an apply is triggered.
+# Runs on merge requests only, so the diff is visible before merging.
 # =============================================================================
 
 plan:non-prod:
@@ -96,7 +99,6 @@ plan:non-prod:
     expire_in: 1 week
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   needs:
     - validate:non-prod
 
@@ -113,7 +115,6 @@ plan:prod:
     expire_in: 1 week
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   needs:
     - validate:prod
 
@@ -132,8 +133,6 @@ apply:non-prod:
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
-  needs:
-    - plan:non-prod
   allow_failure: false
 
 apply:prod:
@@ -144,7 +143,5 @@ apply:prod:
     - terragrunt apply --terragrunt-non-interactive -auto-approve
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-      when: manual   # <── requires a human to trigger
-  needs:
-    - plan:prod
+      when: manual
   allow_failure: false
