@@ -67,7 +67,7 @@ Set the following as masked variables in **Settings → CI/CD → Variables**:
 
 | Trigger | non-prod | prod |
 |---|---|---|
-| Merge request | validate + plan | validate + plan |
+| Every pipeline | validate + plan | validate + plan |
 | Merge to default branch | manual apply | manual apply |
 
 ## Running locally

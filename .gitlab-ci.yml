@@ -3,7 +3,7 @@
 #
 # Pipeline behaviour
 # ──────────────────
-# • Merge request:            validate → plan  (both environments)
+# • Every pipeline:           validate → plan  (both environments)
 # • Merge to default branch:  apply available as a manual trigger (both environments)
 #
 # Required GitLab CI/CD variables  (Settings → CI/CD → Variables)
@@ -69,8 +69,6 @@ validate:non-prod:
   script:
     - cd "${ENV_DIR}"
     - terragrunt validate --terragrunt-non-interactive
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
 
 validate:prod:
   extends: .prod
@@ -78,12 +76,10 @@ validate:prod:
   script:
     - cd "${ENV_DIR}"
     - terragrunt validate --terragrunt-non-interactive
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
 
 # =============================================================================
 # PLAN
-# Runs on merge requests only, so the diff is visible before merging.
+# Runs on every pipeline.
 # =============================================================================
 
 plan:non-prod:
@@ -97,8 +93,6 @@ plan:non-prod:
     paths:
       - non-prod.tfplan
     expire_in: 1 week
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
   needs:
     - validate:non-prod
 
@@ -113,8 +107,6 @@ plan:prod:
     paths:
       - prod.tfplan
     expire_in: 1 week
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
   needs:
     - validate:prod
 
