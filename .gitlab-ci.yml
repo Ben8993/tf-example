@@ -14,6 +14,9 @@
 #   ARM_SUBSCRIPTION_ID           Target Azure subscription ID
 #   POSTGRES_ADMIN_PASSWORD_PROD      Prod DB admin password      (masked)
 #   POSTGRES_ADMIN_PASSWORD_NONPROD   Non-prod DB admin password  (masked)
+#   ARTIFACTORY_HOSTNAME              Artifactory hostname (e.g. artifactory.yourcompany.com)
+#   ARTIFACTORY_REPO                  Artifactory Terraform provider repo name
+#   ARTIFACTORY_TOKEN                 Artifactory identity token  (masked)
 #
 # CI_JOB_TOKEN and CI_PROJECT_ID are injected automatically by GitLab.
 # =============================================================================
@@ -30,12 +33,26 @@ variables:
 
 # ---------------------------------------------------------------------------
 # Base job template
-# Exports Azure credentials from GitLab variables so the azurerm provider
-# can authenticate without any provider-level configuration.
+# - Writes a .terraformrc that routes all provider downloads through
+#   the Artifactory network mirror, so no provider is fetched directly
+#   from registry.terraform.io.
+# - Exports Azure credentials so the azurerm provider can authenticate.
 # ---------------------------------------------------------------------------
 .base:
   image: ${TG_IMAGE}
   before_script:
+    - |
+      cat > /tmp/.terraformrc <<EOF
+      credentials "${ARTIFACTORY_HOSTNAME}" {
+        token = "${ARTIFACTORY_TOKEN}"
+      }
+      provider_installation {
+        network_mirror {
+          url = "https://${ARTIFACTORY_HOSTNAME}/artifactory/${ARTIFACTORY_REPO}/"
+        }
+      }
+      EOF
+    - export TF_CLI_CONFIG_FILE=/tmp/.terraformrc
     - export ARM_CLIENT_ID="${ARM_CLIENT_ID}"
     - export ARM_CLIENT_SECRET="${ARM_CLIENT_SECRET}"
     - export ARM_TENANT_ID="${ARM_TENANT_ID}"

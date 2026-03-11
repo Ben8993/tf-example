@@ -35,23 +35,14 @@ locals {
 
 # ---------------------------------------------------------------------------
 # Provider generation
-# The azurerm provider reads ARM_* env vars automatically; we only need to
-# pin the required_providers block here.
+# Generates provider.tf into the module cache directory.
+# required_providers is declared in the module's versions.tf.
+# Credentials are supplied via ARM_* environment variables.
 # ---------------------------------------------------------------------------
 generate "provider" {
   path      = "provider.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
-    terraform {
-      required_version = ">= 1.5.0"
-      required_providers {
-        azurerm = {
-          source  = "hashicorp/azurerm"
-          version = "~> 3.90"
-        }
-      }
-    }
-
     provider "azurerm" {
       features {}
       subscription_id = "${local.subscription_id}"
@@ -76,7 +67,6 @@ remote_state {
     address        = local.state_address
     lock_address   = "${local.state_address}/lock"
     unlock_address = "${local.state_address}/lock"
-    method         = "POST"
     lock_method    = "POST"
     unlock_method  = "DELETE"
     retry_wait_min = 5

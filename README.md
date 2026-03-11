@@ -53,8 +53,13 @@ Set the following as masked variables in **Settings → CI/CD → Variables**:
 | `ARM_SUBSCRIPTION_ID` | Target subscription ID |
 | `POSTGRES_ADMIN_PASSWORD_PROD` | Prod server admin password |
 | `POSTGRES_ADMIN_PASSWORD_NONPROD` | Non-prod server admin password |
+| `ARTIFACTORY_HOSTNAME` | Artifactory hostname (e.g. `artifactory.yourcompany.com`) |
+| `ARTIFACTORY_REPO` | Artifactory Terraform provider repo name |
+| `ARTIFACTORY_TOKEN` | Artifactory identity token |
 
 `CI_JOB_TOKEN` and `CI_PROJECT_ID` are injected automatically by GitLab.
+
+All provider downloads are routed through the Artifactory network mirror via a dynamically generated `.terraformrc` — no changes needed to individual module `versions.tf` files.
 
 ## Environments
 
