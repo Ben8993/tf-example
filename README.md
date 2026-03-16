@@ -50,7 +50,6 @@ Set the following as masked variables in **Settings → CI/CD → Variables**:
 | `ARM_CLIENT_ID` | Service Principal app ID |
 | `ARM_CLIENT_SECRET` | Service Principal secret |
 | `ARM_TENANT_ID` | Azure AD tenant ID |
-| `ARM_SUBSCRIPTION_ID` | Target subscription ID |
 | `POSTGRES_ADMIN_PASSWORD_PROD` | Prod server admin password |
 | `POSTGRES_ADMIN_PASSWORD_NONPROD` | Non-prod server admin password |
 | `ARTIFACTORY_HOSTNAME` | Artifactory hostname (e.g. `artifactory.yourcompany.com`) |

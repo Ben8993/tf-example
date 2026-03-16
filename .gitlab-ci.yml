@@ -3,15 +3,16 @@
 #
 # Pipeline behaviour
 # ──────────────────
-# • Every pipeline:           validate → plan  (both environments)
-# • Merge to default branch:  apply available as a manual trigger (both environments)
+# • Every pipeline:                       validate → plan  (both environments)
+# • Merge to default branch:              apply available as a manual trigger (both environments)
+# • Pipeline with CONFIRM_DESTROY=true:   destroy jobs appear and require a manual trigger
 #
 # Required GitLab CI/CD variables  (Settings → CI/CD → Variables)
 # ──────────────────────────────────────────────────────────────────
 #   ARM_CLIENT_ID                 Service Principal app ID
 #   ARM_CLIENT_SECRET             Service Principal secret        (masked)
 #   ARM_TENANT_ID                 Azure AD tenant ID
-#   ARM_SUBSCRIPTION_ID           Target Azure subscription ID
+#   (subscription ID is set per-environment via env.hcl, not as a CI variable)
 #   POSTGRES_ADMIN_PASSWORD_PROD      Prod DB admin password      (masked)
 #   POSTGRES_ADMIN_PASSWORD_NONPROD   Non-prod DB admin password  (masked)
 #   ARTIFACTORY_HOSTNAME              Artifactory hostname (e.g. artifactory.yourcompany.com)
@@ -25,6 +26,7 @@ stages:
   - validate
   - plan
   - apply
+  - destroy
 
 # Pin image versions here – update as new releases are published.
 variables:
@@ -56,7 +58,6 @@ variables:
     - export ARM_CLIENT_ID="${ARM_CLIENT_ID}"
     - export ARM_CLIENT_SECRET="${ARM_CLIENT_SECRET}"
     - export ARM_TENANT_ID="${ARM_TENANT_ID}"
-    - export ARM_SUBSCRIPTION_ID="${ARM_SUBSCRIPTION_ID}"
   interruptible: true
 
 # ---------------------------------------------------------------------------
@@ -85,14 +86,14 @@ validate:non-prod:
   stage: validate
   script:
     - cd "${ENV_DIR}"
-    - terragrunt validate --terragrunt-non-interactive
+    - terragrunt validate
 
 validate:prod:
   extends: .prod
   stage: validate
   script:
     - cd "${ENV_DIR}"
-    - terragrunt validate --terragrunt-non-interactive
+    - terragrunt validate
 
 # =============================================================================
 # PLAN
@@ -104,7 +105,7 @@ plan:non-prod:
   stage: plan
   script:
     - cd "${ENV_DIR}"
-    - terragrunt plan --terragrunt-non-interactive -out="${CI_PROJECT_DIR}/non-prod.tfplan"
+    - terragrunt plan -out="${CI_PROJECT_DIR}/non-prod.tfplan"
   artifacts:
     name: non-prod-plan
     paths:
@@ -118,7 +119,7 @@ plan:prod:
   stage: plan
   script:
     - cd "${ENV_DIR}"
-    - terragrunt plan --terragrunt-non-interactive -out="${CI_PROJECT_DIR}/prod.tfplan"
+    - terragrunt plan -out="${CI_PROJECT_DIR}/prod.tfplan"
   artifacts:
     name: prod-plan
     paths:
@@ -129,8 +130,7 @@ plan:prod:
 
 # =============================================================================
 # APPLY
-# Both environments: plan runs automatically on merge to default branch,
-# apply always requires a manual trigger.
+# Both environments: apply always requires a manual trigger.
 # =============================================================================
 
 apply:non-prod:
@@ -138,7 +138,7 @@ apply:non-prod:
   stage: apply
   script:
     - cd "${ENV_DIR}"
-    - terragrunt apply --terragrunt-non-interactive -auto-approve
+    - terragrunt apply -auto-approve
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
@@ -149,8 +149,38 @@ apply:prod:
   stage: apply
   script:
     - cd "${ENV_DIR}"
-    - terragrunt apply --terragrunt-non-interactive -auto-approve
+    - terragrunt apply -auto-approve
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual
+  allow_failure: false
+
+# =============================================================================
+# DESTROY
+# Two-step protection:
+#   1. Job only appears if the pipeline is triggered with CONFIRM_DESTROY=true
+#      set as a pipeline variable (CI/CD → Run pipeline → Variables).
+#   2. Even then, the job still requires a manual click to execute.
+# =============================================================================
+
+destroy:non-prod:
+  extends: .non-prod
+  stage: destroy
+  script:
+    - cd "${ENV_DIR}"
+    - terragrunt destroy -auto-approve
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
+      when: manual
+  allow_failure: false
+
+destroy:prod:
+  extends: .prod
+  stage: destroy
+  script:
+    - cd "${ENV_DIR}"
+    - terragrunt destroy -auto-approve
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
       when: manual
   allow_failure: false
