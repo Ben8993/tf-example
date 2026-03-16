@@ -5,7 +5,7 @@
 # ──────────────────
 # • Every pipeline:                       validate → plan  (both environments)
 # • Merge to default branch:              apply available as a manual trigger (both environments)
-# • Pipeline with CONFIRM_DESTROY=true:   destroy jobs appear and require a manual trigger
+# • Pipeline with CONFIRM_DESTROY=true:   plan-destroy runs automatically, then destroy requires a manual trigger
 #
 # Required GitLab CI/CD variables  (Settings → CI/CD → Variables)
 # ──────────────────────────────────────────────────────────────────
@@ -26,6 +26,7 @@ stages:
   - validate
   - plan
   - apply
+  - plan-destroy
   - destroy
 
 # Pin image versions here – update as new releases are published.
@@ -156,11 +157,33 @@ apply:prod:
   allow_failure: false
 
 # =============================================================================
+# PLAN-DESTROY
+# Runs automatically when CONFIRM_DESTROY=true so you can review what will be
+# removed before clicking the destroy trigger.
+# =============================================================================
+
+plan-destroy:non-prod:
+  extends: .non-prod
+  stage: plan-destroy
+  script:
+    - cd "${ENV_DIR}"
+    - terragrunt plan -destroy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
+
+plan-destroy:prod:
+  extends: .prod
+  stage: plan-destroy
+  script:
+    - cd "${ENV_DIR}"
+    - terragrunt plan -destroy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
+
+# =============================================================================
 # DESTROY
-# Two-step protection:
-#   1. Job only appears if the pipeline is triggered with CONFIRM_DESTROY=true
-#      set as a pipeline variable (CI/CD → Run pipeline → Variables).
-#   2. Even then, the job still requires a manual click to execute.
+# Only appears when CONFIRM_DESTROY=true. Requires a manual trigger after
+# reviewing the plan-destroy output above.
 # =============================================================================
 
 destroy:non-prod:
@@ -172,6 +195,8 @@ destroy:non-prod:
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
       when: manual
+  needs:
+    - plan-destroy:non-prod
   allow_failure: false
 
 destroy:prod:
@@ -183,4 +208,6 @@ destroy:prod:
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
       when: manual
+  needs:
+    - plan-destroy:prod
   allow_failure: false
