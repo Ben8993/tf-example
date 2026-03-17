@@ -1,21 +1,13 @@
-resource "azurerm_private_dns_zone" "postgres" {
-  name                = "privatelink.postgres.database.azure.com"
-  resource_group_name = var.resource_group_name
-  tags                = var.tags
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
-  name                  = "${var.server_name}-vnet-link"
-  resource_group_name   = var.resource_group_name
-  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
-  virtual_network_id    = var.virtual_network_id
-  tags                  = var.tags
+resource "azurerm_resource_group" "this" {
+  name     = var.resource_group_name
+  location = var.location
+  tags     = var.tags
 }
 
 resource "azurerm_postgresql_flexible_server" "this" {
   name                = var.server_name
-  resource_group_name = var.resource_group_name
-  location            = var.location
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
 
   version                = var.postgresql_version
   administrator_login    = var.administrator_login
@@ -24,10 +16,19 @@ resource "azurerm_postgresql_flexible_server" "this" {
   sku_name   = var.sku_name
   storage_mb = var.storage_mb
 
-  delegated_subnet_id = var.delegated_subnet_id
-  private_dns_zone_id = azurerm_private_dns_zone.postgres.id
+  backup_retention_days        = var.backup_retention_days
+  geo_redundant_backup_enabled = var.geo_redundant_backup_enabled
+
+  public_network_access_enabled = true
 
   tags = var.tags
+}
 
-  depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
+resource "azurerm_postgresql_flexible_server_database" "this" {
+  for_each = toset(var.databases)
+
+  name      = each.value
+  server_id = azurerm_postgresql_flexible_server.this.id
+  charset   = "UTF8"
+  collation = "en_US.utf8"
 }

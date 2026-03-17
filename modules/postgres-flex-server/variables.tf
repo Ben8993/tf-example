@@ -35,17 +35,26 @@ variable "storage_mb" {
   default = 32768
 }
 
-variable "delegated_subnet_id" {
-  type        = string
-  description = "Subnet delegated to Microsoft.DBforPostgreSQL/flexibleServers."
+variable "backup_retention_days" {
+  type    = number
+  default = 7
 }
 
-variable "virtual_network_id" {
-  type        = string
-  description = "VNet to link the private DNS zone to."
+variable "geo_redundant_backup_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "databases" {
+  type    = list(string)
+  default = []
+}
+
+variable "env" {
+  type = string
 }
 
 variable "tags" {
   type    = map(string)
-  default = {"dev" = "test"}
+  default = {}
 }
