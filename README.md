@@ -158,9 +158,9 @@ inputs = {
 
 `location` and `env` are passed automatically from the root config — no need to repeat them in inputs unless you need to override them.
 
-**3. Add CI jobs**
+**3. No CI changes needed**
 
-Duplicate the existing `validate`, `plan`, `apply`, `plan-destroy`, and `destroy` job triplets in `.gitlab-ci.yml`, updating `ENV_DIR` to point to the new module path. The `.dev`, `.stg`, and `.prod` templates handle auth, Artifactory, and environment scoping automatically.
+The pipeline uses `terragrunt run-all` at the environment root (`/dev`, `/stg`, `/prod`). Any module subdirectory with a `terragrunt.hcl` is picked up automatically — no new jobs required.
 
 ## Running locally
 

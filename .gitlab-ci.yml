@@ -7,6 +7,10 @@
 # • Merge to default branch:              apply available as a manual trigger (all environments)
 # • Pipeline with CONFIRM_DESTROY=true:   plan-destroy runs automatically, then destroy requires a manual trigger
 #
+# Each stage runs `terragrunt run-all` at the environment root, so all modules
+# under /dev, /stg, /prod are picked up automatically — no CI changes needed
+# when adding a new module.
+#
 # Required GitLab CI/CD variables  (Settings → CI/CD → Variables)
 # ──────────────────────────────────────────────────────────────────
 #   ARM_CLIENT_ID                 Service Principal app ID         (scope per environment)
@@ -62,25 +66,27 @@ variables:
 
 # ---------------------------------------------------------------------------
 # Environment templates
+# ENV_DIR points to the environment root. Jobs use `run-all` to operate
+# across every module subdirectory automatically.
 # ---------------------------------------------------------------------------
 .dev:
   extends: .base
   variables:
-    ENV_DIR: "${TF_ROOT}/dev/postgres-flex"
+    ENV_DIR: "${TF_ROOT}/dev"
   environment:
     name: dev
 
 .stg:
   extends: .base
   variables:
-    ENV_DIR: "${TF_ROOT}/stg/postgres-flex"
+    ENV_DIR: "${TF_ROOT}/stg"
   environment:
     name: stg
 
 .prod:
   extends: .base
   variables:
-    ENV_DIR: "${TF_ROOT}/prod/postgres-flex"
+    ENV_DIR: "${TF_ROOT}/prod"
   environment:
     name: prod
 
@@ -93,21 +99,21 @@ validate:dev:
   stage: validate
   script:
     - cd "${ENV_DIR}"
-    - terragrunt validate
+    - terragrunt run-all validate
 
 validate:stg:
   extends: .stg
   stage: validate
   script:
     - cd "${ENV_DIR}"
-    - terragrunt validate
+    - terragrunt run-all validate
 
 validate:prod:
   extends: .prod
   stage: validate
   script:
     - cd "${ENV_DIR}"
-    - terragrunt validate
+    - terragrunt run-all validate
 
 # =============================================================================
 # PLAN
@@ -119,12 +125,7 @@ plan:dev:
   stage: plan
   script:
     - cd "${ENV_DIR}"
-    - terragrunt plan -out="${CI_PROJECT_DIR}/dev.tfplan"
-  artifacts:
-    name: dev-plan
-    paths:
-      - dev.tfplan
-    expire_in: 1 week
+    - terragrunt run-all plan
   needs:
     - validate:dev
 
@@ -133,12 +134,7 @@ plan:stg:
   stage: plan
   script:
     - cd "${ENV_DIR}"
-    - terragrunt plan -out="${CI_PROJECT_DIR}/stg.tfplan"
-  artifacts:
-    name: stg-plan
-    paths:
-      - stg.tfplan
-    expire_in: 1 week
+    - terragrunt run-all plan
   needs:
     - validate:stg
 
@@ -147,12 +143,7 @@ plan:prod:
   stage: plan
   script:
     - cd "${ENV_DIR}"
-    - terragrunt plan -out="${CI_PROJECT_DIR}/prod.tfplan"
-  artifacts:
-    name: prod-plan
-    paths:
-      - prod.tfplan
-    expire_in: 1 week
+    - terragrunt run-all plan
   needs:
     - validate:prod
 
@@ -166,7 +157,7 @@ apply:dev:
   stage: apply
   script:
     - cd "${ENV_DIR}"
-    - terragrunt apply -auto-approve
+    - terragrunt run-all apply -auto-approve
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
@@ -177,7 +168,7 @@ apply:stg:
   stage: apply
   script:
     - cd "${ENV_DIR}"
-    - terragrunt apply -auto-approve
+    - terragrunt run-all apply -auto-approve
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
@@ -188,7 +179,7 @@ apply:prod:
   stage: apply
   script:
     - cd "${ENV_DIR}"
-    - terragrunt apply -auto-approve
+    - terragrunt run-all apply -auto-approve
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
@@ -205,7 +196,7 @@ plan-destroy:dev:
   stage: plan-destroy
   script:
     - cd "${ENV_DIR}"
-    - terragrunt plan -destroy
+    - terragrunt run-all plan -destroy
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
 
@@ -214,7 +205,7 @@ plan-destroy:stg:
   stage: plan-destroy
   script:
     - cd "${ENV_DIR}"
-    - terragrunt plan -destroy
+    - terragrunt run-all plan -destroy
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
 
@@ -223,7 +214,7 @@ plan-destroy:prod:
   stage: plan-destroy
   script:
     - cd "${ENV_DIR}"
-    - terragrunt plan -destroy
+    - terragrunt run-all plan -destroy
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
 
@@ -238,7 +229,7 @@ destroy:dev:
   stage: destroy
   script:
     - cd "${ENV_DIR}"
-    - terragrunt destroy -auto-approve
+    - terragrunt run-all destroy -auto-approve
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
       when: manual
@@ -251,7 +242,7 @@ destroy:stg:
   stage: destroy
   script:
     - cd "${ENV_DIR}"
-    - terragrunt destroy -auto-approve
+    - terragrunt run-all destroy -auto-approve
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
       when: manual
@@ -264,7 +255,7 @@ destroy:prod:
   stage: destroy
   script:
     - cd "${ENV_DIR}"
-    - terragrunt destroy -auto-approve
+    - terragrunt run-all destroy -auto-approve
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
       when: manual
