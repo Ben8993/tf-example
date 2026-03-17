@@ -1,6 +1,6 @@
 # tf-example — Azure PostgreSQL Flexible Server
 
-Terraform module and Terragrunt environment configs for deploying an Azure Database for PostgreSQL Flexible Server into an existing Azure subscription, with GitLab CI/CD for automated deployments.
+Terraform module and Terragrunt environment configs for deploying an Azure Database for PostgreSQL Flexible Server, with GitLab CI/CD for automated deployments.
 
 ## Structure
 
@@ -15,31 +15,33 @@ tf-example/
 │       └── versions.tf
 └── environments/
     ├── terragrunt.hcl              # Root config: provider, GitLab HTTP backend
-    ├── prod/
-    │   ├── env.hcl                 # Prod subscription, region, networking values
+    ├── dev/
+    │   ├── env.hcl                 # Dev subscription and region
     │   └── postgres-flex/
-    │       └── terragrunt.hcl      # Calls module with prod inputs
-    └── non-prod/
-        ├── env.hcl                 # Non-prod subscription, region, networking values
+    │       └── terragrunt.hcl      # Calls module with dev inputs
+    ├── stg/
+    │   ├── env.hcl                 # Stg subscription and region
+    │   └── postgres-flex/
+    │       └── terragrunt.hcl      # Calls module with stg inputs
+    └── prod/
+        ├── env.hcl                 # Prod subscription and region
         └── postgres-flex/
-            └── terragrunt.hcl      # Calls module with non-prod inputs
+            └── terragrunt.hcl      # Calls module with prod inputs
 ```
 
 ## Configuration
 
 ### 1. Update env.hcl for each environment
 
-Each `env.hcl` is the single source of truth for that environment. Update the values to match your Azure setup:
+Each `env.hcl` is the single source of truth for that environment. Each targets its own Azure subscription:
 
 ```hcl
 locals {
-  env             = "prod"
-  subscription_id = "00000000-0000-0000-0000-000000000000"  # your subscription ID
+  env             = "dev"           # dev | stg | prod
+  subscription_id = "00000000-0000-0000-0000-000000000000"
   location        = "uksouth"
 }
 ```
-
-In real use, `prod` and `non-prod` will each have their own subscription ID.
 
 ### 2. GitLab CI/CD variables
 
@@ -50,8 +52,7 @@ Set the following as masked variables in **Settings → CI/CD → Variables**:
 | `ARM_CLIENT_ID` | Service Principal app ID |
 | `ARM_CLIENT_SECRET` | Service Principal secret |
 | `ARM_TENANT_ID` | Azure AD tenant ID |
-| `POSTGRES_ADMIN_PASSWORD_PROD` | Prod server admin password |
-| `POSTGRES_ADMIN_PASSWORD_NONPROD` | Non-prod server admin password |
+| `POSTGRES_ADMIN_PASSWORD` | DB admin password (scope per environment) |
 | `ARTIFACTORY_HOSTNAME` | Artifactory hostname (e.g. `artifactory.yourcompany.com`) |
 | `ARTIFACTORY_REPO` | Artifactory Terraform provider repo name |
 | `ARTIFACTORY_TOKEN` | Artifactory identity token |
@@ -62,30 +63,32 @@ All provider downloads are routed through the Artifactory network mirror via a d
 
 #### Environment-scoped variables
 
-Variables like `ARM_CLIENT_ID`, `ARM_CLIENT_SECRET`, and `ARM_TENANT_ID` will differ between prod and non-prod in real use (separate Service Principals per subscription). GitLab supports scoping variables to a specific environment so the same variable name resolves to a different value depending on which environment the job is running in.
+`ARM_CLIENT_ID`, `ARM_CLIENT_SECRET`, and `ARM_TENANT_ID` will differ per environment in real use (separate Service Principals per subscription). GitLab supports scoping variables to a specific environment so the same variable name resolves to a different value depending on which environment the job is running in.
 
-The pipeline jobs already declare `environment: name: prod` and `environment: name: non-prod` in their templates, so GitLab knows which environment each job belongs to.
+The pipeline jobs already declare `environment: name: dev`, `environment: name: stg`, and `environment: name: prod` in their templates, so GitLab knows which environment each job belongs to.
 
 To configure scoped variables:
 1. Go to **Settings → CI/CD → Variables**
 2. Add the variable (e.g. `ARM_CLIENT_ID`) with the prod value and set **Environment scope** to `prod`
-3. Add the same variable again with the non-prod value and set **Environment scope** to `non-prod`
+3. Repeat for each environment with the appropriate value and scope
 
 GitLab will automatically inject the correct value based on the job's environment. No pipeline changes required.
 
 ## Environments
 
-| Environment | SKU | Storage | HA |
-|---|---|---|---|
-| `prod` | `GP_Standard_D2s_v3` | 64 GB | No |
-| `non-prod` | `B_Standard_B1ms` | 32 GB | No |
+| Environment | SKU | Storage |
+|---|---|---|
+| `dev` | `B_Standard_B1ms` | 32 GB |
+| `stg` | `B_Standard_B2ms` | 32 GB |
+| `prod` | `GP_Standard_D2s_v3` | 64 GB |
 
 ## Pipeline behaviour
 
-| Trigger | non-prod | prod |
-|---|---|---|
-| Every pipeline | validate + plan | validate + plan |
-| Merge to default branch | manual apply | manual apply |
+| Trigger | dev | stg | prod |
+|---|---|---|---|
+| Every pipeline | validate + plan | validate + plan | validate + plan |
+| Merge to default branch | manual apply | manual apply | manual apply |
+| `CONFIRM_DESTROY=true` | plan-destroy, then manual destroy | plan-destroy, then manual destroy | plan-destroy, then manual destroy |
 
 ## Adding a new module
 
@@ -97,7 +100,7 @@ Follow this pattern to add any new Azure resource alongside the existing postgre
 modules/
 └── your-module/
     ├── main.tf       # resource definitions
-    ├── variables.tf  # declare all inputs; no provider or required_providers block
+    ├── variables.tf  # declare all inputs; no provider block
     ├── outputs.tf
     └── versions.tf   # required_providers only — provider block is generated by Terragrunt
 ```
@@ -119,12 +122,12 @@ terraform {
 
 ```
 environments/
-├── prod/
-│   └── your-module/
-│       └── terragrunt.hcl
-└── non-prod/
-    └── your-module/
-        └── terragrunt.hcl
+├── dev/
+│   └── your-module/terragrunt.hcl
+├── stg/
+│   └── your-module/terragrunt.hcl
+└── prod/
+    └── your-module/terragrunt.hcl
 ```
 
 Each `terragrunt.hcl` follows the same pattern — include root, read `env.hcl`, pass inputs:
@@ -157,13 +160,17 @@ inputs = {
 
 **3. Add CI jobs**
 
-Duplicate the existing `validate`, `plan`, `apply`, `plan-destroy`, and `destroy` job pairs in `.gitlab-ci.yml`, updating `ENV_DIR` to point to the new module path. The `.non-prod` and `.prod` templates handle auth, Artifactory, and environment scoping automatically.
+Duplicate the existing `validate`, `plan`, `apply`, `plan-destroy`, and `destroy` job triplets in `.gitlab-ci.yml`, updating `ENV_DIR` to point to the new module path. The `.dev`, `.stg`, and `.prod` templates handle auth, Artifactory, and environment scoping automatically.
 
 ## Running locally
 
 ```bash
-# Plan non-prod
-cd environments/non-prod/postgres-flex
+# Plan dev
+cd environments/dev/postgres-flex
+terragrunt plan
+
+# Plan stg
+cd environments/stg/postgres-flex
 terragrunt plan
 
 # Plan prod

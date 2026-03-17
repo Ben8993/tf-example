@@ -3,21 +3,20 @@
 #
 # Pipeline behaviour
 # ──────────────────
-# • Every pipeline:                       validate → plan  (both environments)
-# • Merge to default branch:              apply available as a manual trigger (both environments)
+# • Every pipeline:                       validate → plan  (all environments)
+# • Merge to default branch:              apply available as a manual trigger (all environments)
 # • Pipeline with CONFIRM_DESTROY=true:   plan-destroy runs automatically, then destroy requires a manual trigger
 #
 # Required GitLab CI/CD variables  (Settings → CI/CD → Variables)
 # ──────────────────────────────────────────────────────────────────
-#   ARM_CLIENT_ID                 Service Principal app ID
-#   ARM_CLIENT_SECRET             Service Principal secret        (masked)
-#   ARM_TENANT_ID                 Azure AD tenant ID
+#   ARM_CLIENT_ID                 Service Principal app ID         (scope per environment)
+#   ARM_CLIENT_SECRET             Service Principal secret          (masked, scope per environment)
+#   ARM_TENANT_ID                 Azure AD tenant ID               (scope per environment)
 #   (subscription ID is set per-environment via env.hcl, not as a CI variable)
-#   POSTGRES_ADMIN_PASSWORD_PROD      Prod DB admin password      (masked)
-#   POSTGRES_ADMIN_PASSWORD_NONPROD   Non-prod DB admin password  (masked)
+#   POSTGRES_ADMIN_PASSWORD           DB admin password            (masked, scope per environment)
 #   ARTIFACTORY_HOSTNAME              Artifactory hostname (e.g. artifactory.yourcompany.com)
 #   ARTIFACTORY_REPO                  Artifactory Terraform provider repo name
-#   ARTIFACTORY_TOKEN                 Artifactory identity token  (masked)
+#   ARTIFACTORY_TOKEN                 Artifactory identity token   (masked)
 #
 # CI_JOB_TOKEN and CI_PROJECT_ID are injected automatically by GitLab.
 # =============================================================================
@@ -62,14 +61,21 @@ variables:
   interruptible: true
 
 # ---------------------------------------------------------------------------
-# Non-prod templates
+# Environment templates
 # ---------------------------------------------------------------------------
-.non-prod:
+.dev:
   extends: .base
   variables:
-    ENV_DIR: "${TF_ROOT}/non-prod/postgres-flex"
+    ENV_DIR: "${TF_ROOT}/dev/postgres-flex"
   environment:
-    name: non-prod
+    name: dev
+
+.stg:
+  extends: .base
+  variables:
+    ENV_DIR: "${TF_ROOT}/stg/postgres-flex"
+  environment:
+    name: stg
 
 .prod:
   extends: .base
@@ -82,8 +88,15 @@ variables:
 # VALIDATE
 # =============================================================================
 
-validate:non-prod:
-  extends: .non-prod
+validate:dev:
+  extends: .dev
+  stage: validate
+  script:
+    - cd "${ENV_DIR}"
+    - terragrunt validate
+
+validate:stg:
+  extends: .stg
   stage: validate
   script:
     - cd "${ENV_DIR}"
@@ -101,19 +114,33 @@ validate:prod:
 # Runs on every pipeline.
 # =============================================================================
 
-plan:non-prod:
-  extends: .non-prod
+plan:dev:
+  extends: .dev
   stage: plan
   script:
     - cd "${ENV_DIR}"
-    - terragrunt plan -out="${CI_PROJECT_DIR}/non-prod.tfplan"
+    - terragrunt plan -out="${CI_PROJECT_DIR}/dev.tfplan"
   artifacts:
-    name: non-prod-plan
+    name: dev-plan
     paths:
-      - non-prod.tfplan
+      - dev.tfplan
     expire_in: 1 week
   needs:
-    - validate:non-prod
+    - validate:dev
+
+plan:stg:
+  extends: .stg
+  stage: plan
+  script:
+    - cd "${ENV_DIR}"
+    - terragrunt plan -out="${CI_PROJECT_DIR}/stg.tfplan"
+  artifacts:
+    name: stg-plan
+    paths:
+      - stg.tfplan
+    expire_in: 1 week
+  needs:
+    - validate:stg
 
 plan:prod:
   extends: .prod
@@ -131,11 +158,22 @@ plan:prod:
 
 # =============================================================================
 # APPLY
-# Both environments: apply always requires a manual trigger.
+# All environments: apply always requires a manual trigger.
 # =============================================================================
 
-apply:non-prod:
-  extends: .non-prod
+apply:dev:
+  extends: .dev
+  stage: apply
+  script:
+    - cd "${ENV_DIR}"
+    - terragrunt apply -auto-approve
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual
+  allow_failure: false
+
+apply:stg:
+  extends: .stg
   stage: apply
   script:
     - cd "${ENV_DIR}"
@@ -162,8 +200,17 @@ apply:prod:
 # removed before clicking the destroy trigger.
 # =============================================================================
 
-plan-destroy:non-prod:
-  extends: .non-prod
+plan-destroy:dev:
+  extends: .dev
+  stage: plan-destroy
+  script:
+    - cd "${ENV_DIR}"
+    - terragrunt plan -destroy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
+
+plan-destroy:stg:
+  extends: .stg
   stage: plan-destroy
   script:
     - cd "${ENV_DIR}"
@@ -186,8 +233,8 @@ plan-destroy:prod:
 # reviewing the plan-destroy output above.
 # =============================================================================
 
-destroy:non-prod:
-  extends: .non-prod
+destroy:dev:
+  extends: .dev
   stage: destroy
   script:
     - cd "${ENV_DIR}"
@@ -196,7 +243,20 @@ destroy:non-prod:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
       when: manual
   needs:
-    - plan-destroy:non-prod
+    - plan-destroy:dev
+  allow_failure: false
+
+destroy:stg:
+  extends: .stg
+  stage: destroy
+  script:
+    - cd "${ENV_DIR}"
+    - terragrunt destroy -auto-approve
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CONFIRM_DESTROY == "true"'
+      when: manual
+  needs:
+    - plan-destroy:stg
   allow_failure: false
 
 destroy:prod:

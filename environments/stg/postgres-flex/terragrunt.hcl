@@ -16,11 +16,11 @@ inputs = {
   server_name         = "psql-flex-${local.env}-uksouth"
   administrator_login = "psqladmin"
 
-  # Set as a masked GitLab CI variable: POSTGRES_ADMIN_PASSWORD (scoped to prod environment)
+  # Set as a masked GitLab CI variable: POSTGRES_ADMIN_PASSWORD (scoped to stg environment)
   administrator_password = get_env("POSTGRES_ADMIN_PASSWORD", "")
 
-  sku_name   = "GP_Standard_D2s_v3"
-  storage_mb = 65536
+  sku_name   = "B_Standard_B2ms"
+  storage_mb = 32768
 
   tags = {
     environment = local.env
